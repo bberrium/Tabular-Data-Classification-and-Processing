@@ -1,0 +1,20 @@
+# Environments
+.venv/
+venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# CatBoost writes this folder on every run
+catboost_info/
+
+# Data: don't commit datasets, they're large and often licensed
+data/*.csv
+!data/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/

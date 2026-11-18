@@ -1,0 +1,65 @@
+# Tabular Data Classification on Imbalanced Data
+
+Predicting a rare event (customer churn, ~5% positives) from messy tabular data.
+Stack: **Python, Pandas, Scikit-Learn, imbalanced-learn, XGBoost, CatBoost**.
+
+## What it does
+
+1. **Preprocessing (Pandas + Scikit-Learn `ColumnTransformer`)**
+   - Numerics: median imputation (+ missing-value indicator columns) -> `StandardScaler`
+   - Categoricals: constant imputation -> `OneHotEncoder(handle_unknown="ignore")`
+   - CatBoost uses its native categorical handling instead of one-hot
+2. **Class imbalance** - compared head to head:
+   - no handling (baseline)
+   - class weights (`class_weight`, `scale_pos_weight`, `auto_class_weights`)
+   - SMOTE oversampling and random undersampling (applied inside an `imblearn` pipeline, so only the training split is resampled - no leakage)
+3. **Models** - Logistic Regression baseline, XGBoost, CatBoost
+4. **Evaluation (business-first, not accuracy)**
+   - Stratified train / validation / test split (60/20/20)
+   - Decision threshold tuned on the **validation** set (F1 or a cost function), then applied once to the test set
+   - Precision, Recall, F1, PR-AUC, ROC-AUC, and a **business cost** (missed churner = 100, wasted retention offer = 10; configurable)
+
+## Run it
+
+```bash
+pip install -r requirements.txt
+python src/make_data.py                 # writes data/customers.csv (synthetic, 40k rows, 5% positive)
+python src/pipeline.py                  # trains all 8 configurations, writes outputs/
+python src/pipeline.py --threshold-metric cost --cost-fn 200 --cost-fp 10   # optimize business cost instead
+```
+
+Outputs: `outputs/results.csv`, `pr_curves.png`, `confusion_matrix.png`, `feature_importance.png`.
+
+## Use a real dataset (recommended before putting this on a resume)
+
+The synthetic data lets the project run offline, but real data is more convincing. Good imbalanced options:
+Telco Customer Churn (~27% positive), Bank Marketing (~12%), Credit Card Fraud (~0.17%), Give Me Some Credit (~7%).
+
+```bash
+python src/pipeline.py --data data/your_file.csv --target <target_column> --id-cols <id_column>
+```
+
+The target must be 0/1. Everything else (column types, missing values) is detected automatically.
+
+## Results on the synthetic data (test set, threshold tuned on validation by F1)
+
+| Model | Imbalance strategy | Precision | Recall | F1 | PR-AUC |
+|---|---|---|---|---|---|
+| CatBoost | class weights | 0.38 | 0.35 | 0.36 | 0.33 |
+| XGBoost | class weights | 0.38 | 0.34 | 0.36 | 0.33 |
+| XGBoost | none | 0.32 | 0.39 | 0.35 | 0.32 |
+| LogReg | class weights | 0.35 | 0.34 | 0.34 | 0.28 |
+| XGBoost | SMOTE | 0.29 | 0.37 | 0.33 | 0.28 |
+
+Always predicting "no churn" scores **95% accuracy** with zero recall - that is why accuracy is not used.
+Gradient boosting beats the linear baseline mainly on PR-AUC (non-linear interactions), but gaps between
+imbalance strategies are small and within noise for a single split; check with cross-validation on real data
+before claiming one strategy wins.
+
+## Ideas to extend it
+
+- Stratified k-fold cross-validation and confidence intervals on the metrics
+- Hyperparameter tuning with Optuna (optimize PR-AUC or cost)
+- Probability calibration (`CalibratedClassifierCV`) before threshold selection
+- SHAP values to explain predictions
+- Feature engineering (ratios such as charges per month of tenure, frequency encodings)
