@@ -17,4 +17,6 @@ data/*.csv
 
 # OS / editor
 .DS_Store
-.vscode/
+.vscode/.venv/
+catboost_info/
+__pycache__/
